@@ -7,9 +7,10 @@
  *  history         -   done!
  *  cd              -   done!
  *  pwd             -   done!
- *  ls              -   started
+ *  ls              -   done!
  *  exit            -   done!
- *  app opening     -   not started
+ *  app opening     -   done!
+ *	piping			-	starting
 */
 #include <unistd.h>
 #include <sys/types.h>      // for ls
@@ -52,7 +53,14 @@ void SetNonCanonicalMode(int fd, struct termios *savedattributes) {
     tcsetattr(fd, TCSAFLUSH, &TermAttributes);
 }
 
+string pwd() {
+    string pwd;
+    char cwd[50];
+    getcwd(cwd, 50);
 
+    pwd += cwd;
+    return pwd;
+}
 
 string history(queue<string> *myHistory, string input, int printCnt) {
     queue<string> printQ; //queue only for a history of 10 elements
@@ -66,6 +74,7 @@ string history(queue<string> *myHistory, string input, int printCnt) {
  
         for(int i = 0; i < printQsize; i++) {
             if(i == printQsize - printCnt) {
+				write(1, pwd().data(), pwd().length());
                 write(1, ">", 1);
                 write(1, printQ.front().data(), printQ.front().length());
                 return printQ.front();
@@ -84,12 +93,14 @@ string history(queue<string> *myHistory, string input, int printCnt) {
 } //int history()
 
 
+
 string getInput(queue<string> *myHistory) {
     struct termios SavedTermAttributes;
     char rawIn;
     int histCount = 0; //history counter for up and down keys
     string formattedIn;
     SetNonCanonicalMode(STDIN_FILENO, &SavedTermAttributes);
+    write(1, pwd().data(), pwd().length());
     write(STDOUT_FILENO, ">", 1);
        
     while(1)
@@ -103,7 +114,7 @@ string getInput(queue<string> *myHistory) {
             if(rawIn == 0x5B) {
                 read(STDIN_FILENO, &rawIn, 1);  //keep reading input
  
-                if (rawIn == 0x41) {                //up arrow
+                if (rawIn == 0x41) {                					//up arrow
                     if(histCount < (int)myHistory->size()) {
                         histCount++;
                    } else {
@@ -121,6 +132,7 @@ string getInput(queue<string> *myHistory) {
                     if(histCount <= 0) {  
                         for(int i = 0; i < 100 ; i++ )
                             write (1, "\b \b", 3);                      //lazy backspaces
+                        write(1, pwd().data(), pwd().length());
                         write(1, ">", 1);
                         histCount = 0;
                         formattedIn.clear();
@@ -171,14 +183,6 @@ void printHistory(queue<string> printQ) {
     }
 }
 
-string pwd() {
-    string pwd;
-    char cwd[50];
-    getcwd(cwd, 50);
-
-    pwd += cwd;
-    return pwd;
-}
 
 string setDir(string arguments) {
     string dir;
@@ -305,20 +309,18 @@ int main(int argc, char *argv[]) {
             _exit(0);
         } else {                            // attempts to run process
            
-            // fork() returns 0 to child process
-            // wait() waits for child
-            // execv(path , arguments)
-            int pid;
-            if ((pid = fork()) != 0){
+           
+           
+
+            int pid = fork();
+            if (pid != 0){
                 while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
             
             } else {
-                char *argv[32]= {NULL};  // pointer to size 32 array
-                
+				
+                char *argv[32]= {NULL};  			// pointer to size 32 array
                 argv[0] = strdup(command.c_str());
-                
                 int i = 1;
- 
                 while (!arguments.empty()) {                            // parse arguments further into argv
                     if(arguments.find_first_of(' ') != string::npos) {          // if arguments has a space character
                         argv[i] = strdup(arguments.substr(0, arguments.find_first_of(' ')).data());
