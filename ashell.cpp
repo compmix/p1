@@ -53,13 +53,18 @@ void SetNonCanonicalMode(int fd, struct termios *savedattributes) {
     tcsetattr(fd, TCSAFLUSH, &TermAttributes);
 }
 
-string pwd() {
+string pwd(int full = 1) {
     string pwd;
-    char cwd[50];
-    getcwd(cwd, 50);
+    char cwd[128];
+    getcwd(cwd, 128);
 
     pwd += cwd;
-    return pwd;
+    
+	if(full) return pwd;
+	else if (pwd.length() > 16) {
+		pwd = "/..." + pwd.substr(pwd.find_last_of('/'));
+	}
+	return pwd;
 }
 
 string history(queue<string> *myHistory, string input, int printCnt) {
@@ -74,7 +79,7 @@ string history(queue<string> *myHistory, string input, int printCnt) {
  
         for(int i = 0; i < printQsize; i++) {
             if(i == printQsize - printCnt) {
-				write(1, pwd().data(), pwd().length());
+				write(1, pwd(0).data(), pwd(0).length());
                 write(1, ">", 1);
                 write(1, printQ.front().data(), printQ.front().length());
                 return printQ.front();
@@ -100,7 +105,7 @@ string getInput(queue<string> *myHistory) {
     int histCount = 0; //history counter for up and down keys
     string formattedIn;
     SetNonCanonicalMode(STDIN_FILENO, &SavedTermAttributes);
-    write(1, pwd().data(), pwd().length());
+    write(1, pwd(0).data(), pwd(0).length());
     write(STDOUT_FILENO, ">", 1);
        
     while(1)
@@ -132,7 +137,7 @@ string getInput(queue<string> *myHistory) {
                     if(histCount <= 0) {  
                         for(int i = 0; i < 100 ; i++ )
                             write (1, "\b \b", 3);                      //lazy backspaces
-                        write(1, pwd().data(), pwd().length());
+                        write(1, pwd(0).data(), pwd(0).length());
                         write(1, ">", 1);
                         histCount = 0;
                         formattedIn.clear();
@@ -302,7 +307,7 @@ int main(int argc, char *argv[]) {
             printHistory(myHistory);
             
         } else if (command == "pwd") {      // print working directory
-            write(1, pwd().data(), pwd().length());
+            write(1, pwd().data(), pwd(1).length());
             write(1, "\n", 1);
             
         } else if (command == "exit") {     // breaks and exits shell
