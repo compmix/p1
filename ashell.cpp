@@ -357,27 +357,27 @@ int main(int argc, char *argv[]) {
         } else {                            // attempts to run process
 			string filename;
 			
-			while((arguments.find(">") != string::npos) || (arguments.find("<") != string::npos) || (arguments.find("|") != string::npos)) {				// redirecting left > right
+			while((arguments.find_first_of("><|") != string::npos)) {				// as long as there are special symbols
 				
 				if(arguments.find(">") != string::npos) {
 					size_t found = arguments.find(">");
 					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);		// remove extra spaces
 					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
-					filename = arguments.substr(arguments.find(">") + 1);		// save filename
-					cout << filename << endl;
-					found = arguments.find(">");
-					size_t foundNext = arguments.find(">", found + 1);
-
-					arguments.erase(found, foundNext);		// if no more arguments erase right parameters for running
+					filename = arguments.substr(arguments.find(">") + 1);				// save filename
 					
-					cout << arguments << endl;
-				
+					found = arguments.find(">");										
+					size_t foundNext = arguments.find_first_of("><|", found + 1);
+					
+					string args = arguments.substr(0, found);
+					arguments.erase(found, foundNext);			// if no more arguments erase right parameters for running
+					
 					int file, stdout;
-					file = open(filename.data(), O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
+					file = open(filename.data(), O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
 					stdout = dup(STDOUT_FILENO);									// save STDIN to stdin
 					dup2(file, STDOUT_FILENO);										// copy file fd to STDIN
 				
-					if (run(command, arguments) < 0) return 0;
+					
+					if (run(command, args) < 0) return 0;
 				
 					dup2(stdout, STDOUT_FILENO);								// return stdout back to STDIN
 					
@@ -386,21 +386,21 @@ int main(int argc, char *argv[]) {
 					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);
 					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
 					filename = arguments.substr(arguments.find("<") + 1);		// save filename
-					cout << filename << endl;
+					
 					found = arguments.find("<");
-					size_t foundNext = arguments.find("<", found + 1);
+					size_t foundNext = arguments.find_first_of("><|", found + 1);
 		
+					string args = arguments.substr(0, found);
 					arguments.erase(found, foundNext);					// if no more arguments erase right parameters for running
-								
 
 					int file, stdin;
-					file = open(filename.data(), O_RDONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
+					file = open(filename.data(), O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
 					stdin = dup(STDIN_FILENO);									// save STDIN to stdin
 					dup2(file, STDIN_FILENO);									// copy file fd to STDIN
 					
-					if (run(command, arguments) < 0) return 0;
+					if (run(command, args) < 0) return 0;
 				
-					dup2(stdin, STDIN_FILENO);							// return stdout back to STDIN
+					dup2(stdin, STDIN_FILENO);							// return stdin back to STDIN
 				}
 				continue;
 			}
