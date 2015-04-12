@@ -360,11 +360,17 @@ int main(int argc, char *argv[]) {
 			while((arguments.find(">") != string::npos) || (arguments.find("<") != string::npos) || (arguments.find("|") != string::npos)) {				// redirecting left > right
 				
 				if(arguments.find(">") != string::npos) {
-					filename = arguments.substr(arguments.find(">") + 1);		// save filename
 					size_t found = arguments.find(">");
+					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);		// remove extra spaces
+					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
+					filename = arguments.substr(arguments.find(">") + 1);		// save filename
+					cout << filename << endl;
+					found = arguments.find(">");
 					size_t foundNext = arguments.find(">", found + 1);
 
 					arguments.erase(found, foundNext);		// if no more arguments erase right parameters for running
+					
+					cout << arguments << endl;
 				
 					int file, stdout;
 					file = open(filename.data(), O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
@@ -374,13 +380,19 @@ int main(int argc, char *argv[]) {
 					if (run(command, arguments) < 0) return 0;
 				
 					dup2(stdout, STDOUT_FILENO);								// return stdout back to STDIN
-				} else if(arguments.find("<") != string::npos) {
-					filename = arguments.substr(arguments.find(" < ") + 3);		// save filename
-					size_t found = arguments.find(" < ");
-					size_t foundNext = arguments.find(" < ", found + 1);
-
-					arguments.erase(found, foundNext);					// if no more arguments erase right parameters for running
 					
+				} else if(arguments.find("<") != string::npos) {
+					size_t found = arguments.find("<");
+					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);
+					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
+					filename = arguments.substr(arguments.find("<") + 1);		// save filename
+					cout << filename << endl;
+					found = arguments.find("<");
+					size_t foundNext = arguments.find("<", found + 1);
+		
+					arguments.erase(found, foundNext);					// if no more arguments erase right parameters for running
+								
+
 					int file, stdin;
 					file = open(filename.data(), O_RDONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
 					stdin = dup(STDIN_FILENO);									// save STDIN to stdin
@@ -392,7 +404,7 @@ int main(int argc, char *argv[]) {
 				}
 				continue;
 			}
-				
+
 			if (run(command, arguments) < 0) return 0;
 			
            
