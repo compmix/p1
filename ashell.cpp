@@ -24,6 +24,7 @@
 #include <string>           // easier than c string
 #include <queue>            // for history
 #include <cstring>
+#include <fcntl.h>
 #include <iostream> //for testing only
 
 using namespace std;
@@ -80,7 +81,7 @@ string history(queue<string> *myHistory, string input, int printCnt) {
         for(int i = 0; i < printQsize; i++) {
             if(i == printQsize - printCnt) {
 				write(1, pwd(0).data(), pwd(0).length());
-                write(1, ">", 1);
+                write(1, "> ", 2);
                 write(1, printQ.front().data(), printQ.front().length());
                 return printQ.front();
             }
@@ -106,7 +107,7 @@ string getInput(queue<string> *myHistory) {
     string formattedIn;
     SetNonCanonicalMode(STDIN_FILENO, &SavedTermAttributes);
     write(1, pwd(0).data(), pwd(0).length());
-    write(STDOUT_FILENO, ">", 1);
+    write(STDOUT_FILENO, "> ", 2);
        
     while(1)
     {
@@ -114,17 +115,16 @@ string getInput(queue<string> *myHistory) {
         if(0x04 == rawIn) break; //Ctrl-d
         if(rawIn == '\n') break; //Enter key
  
-        if(rawIn == 0x1B) {//up and down arrow check
+        if(rawIn == 0x1B) {		//up and down arrow check
             read(STDIN_FILENO, &rawIn, 1);
             if(rawIn == 0x5B) {
                 read(STDIN_FILENO, &rawIn, 1);  //keep reading input
  
                 if (rawIn == 0x41) {                					//up arrow
-                    if(histCount < (int)myHistory->size()) {
-                        histCount++;
-                   } else {
-                       write(1, "\a", 1);
-                   }
+                    if(histCount < (int)myHistory->size())				// if the
+						histCount++;
+					else
+						write(1, "\a", 1);
  
                     if(myHistory->size() > 0)
                         formattedIn = history(myHistory, "`u", histCount);
@@ -134,15 +134,23 @@ string getInput(queue<string> *myHistory) {
  
                 if(rawIn == 0x42) {                                     // down arrow
                     histCount--;
-                    if(histCount <= 0) {  
-                        for(int i = 0; i < 100 ; i++ )
+                    if(histCount < 0) {  
+                        for(int i = 0; i < 100 ; i++)
                             write (1, "\b \b", 3);                      //lazy backspaces
                         write(1, pwd(0).data(), pwd(0).length());
-                        write(1, ">", 1);
+                        write(1, "\a> ", 3);
                         histCount = 0;
                         formattedIn.clear();
                         continue;
-                    }
+                    } else if(histCount == 0) {
+						for(int i = 0; i < 100 ; i++)
+							write (1, "\b \b", 3);                      //lazy backspaces
+                        write(1, pwd(0).data(), pwd(0).length());
+                        write(1, "> ", 2);
+                        histCount = 0;
+                        formattedIn.clear();
+                        continue;
+					}
  
                     formattedIn = history(myHistory, "`d", histCount);
                     continue;
@@ -153,9 +161,9 @@ string getInput(queue<string> *myHistory) {
         }
  
         if (rawIn == 0x7F || rawIn == 0x08) {               //mac "Delete"  or "backspace"
-            if (formattedIn.empty()) {                      //if nothing to delete play bell
+            if (formattedIn.empty())	                     //if nothing to delete play bell
                 write(STDOUT_FILENO, "\a", 1);
-            } else {
+            else {
                 write(STDOUT_FILENO, "\b \b", 3);
                 formattedIn.resize(formattedIn.length() - 1);
             }
@@ -277,31 +285,64 @@ void printLS(string dir, string arguments) {
     closedir(mydir);
 }
 
+int run(string command, string arguments) {
+	int pid = fork();
+	if (pid != 0) {
+		while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
+	
+	} else {
+		
+		char *argv[32]= {NULL};  			// pointer to size 32 array
+		argv[0] = strdup(command.c_str());
+		int i = 1;
+		while (!arguments.empty()) {                            // parse arguments further into argv
+			if(arguments.find_first_of(' ') != string::npos) {          // if arguments has a space character
+				argv[i] = strdup(arguments.substr(0, arguments.find_first_of(' ')).data());
+				arguments.erase(0, arguments.find_first_of(' ') + 1);
+			} else {                                                    // if no space character
+				argv[i] = strdup(arguments.substr(0, arguments.find_first_of(' ')).data());
+				arguments.erase(0, arguments.find_first_of(' '));
+			}
+			i++;
+		}
+		
+		argv[i] = '\0';
+
+		if (execvp(argv[0], argv) < 0){
+			write(1, command.data(), command.length());
+			write(1, ": command not found\n" , 20);
+			return -1;
+		}
+	}
+	
+	return 0;
+}
+
 int main(int argc, char *argv[]) {
     queue<string> myHistory;                //queue for all history
 
     while (1) {
         string input = getInput(&myHistory); //always waiting for input
-        string command = input.substr(0, input.find_first_of(' '));          // cout << "command: " << command << endl;      //  puts executable in its own string
+        string command = input.substr(0, input.find_first_of(' '));           // cout << "command: " << command << endl;      //  puts executable in its own string
         string arguments;
 
-        if(input.find_first_of(' ') != string::npos) {       // if space exists after command
+
+        if(input.find_first_of(' ') != string::npos)       // if space exists after command
             arguments = input.substr(input.find_first_of(' ') + 1);     // puts everything after the space into arguments
-        }
         
         history(&myHistory, input, 0); //history function call
         
         if (command == "cd") {                                                   // cout << "change directory ";
             if(chdir(setDir(arguments).data()) == -1) {           // changes dir, checks error
-                    write(1, "cd: ", 4);                                        // cout << arguments << ": No such file or directory" << endl;
-                    write(1, arguments.data(), arguments.length());
-                    write(1, ": No such file or directory\n", 28);
+				write(1, "cd: ", 4);                                        // cout << arguments << ": No such file or directory" << endl;
+				write(1, arguments.data(), arguments.length());
+				write(1, ": No such file or directory\n", 28);
             }
 
         } else if (command == "ls") {                                                   // cout << "list directory ";
-                if(arguments.empty()) arguments = ".";          // empty arguments should return current directory, not home
-                string dir = setDir(arguments);
-                printLS(dir, arguments);
+			if(arguments.empty()) arguments = ".";          // empty arguments should return current directory, not home
+			string dir = setDir(arguments);
+			printLS(dir, arguments);
  
         } else if(command == "history") {
             printHistory(myHistory);
@@ -312,38 +353,48 @@ int main(int argc, char *argv[]) {
             
         } else if (command == "exit") {     // breaks and exits shell
             _exit(0);
-        } else {                            // attempts to run process
-           
-           
-           
-
-            int pid = fork();
-            if (pid != 0){
-                while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
             
-            } else {
+        } else {                            // attempts to run process
+			string filename;
+			
+			while((arguments.find(">") != string::npos) || (arguments.find("<") != string::npos) || (arguments.find("|") != string::npos)) {				// redirecting left > right
 				
-                char *argv[32]= {NULL};  			// pointer to size 32 array
-                argv[0] = strdup(command.c_str());
-                int i = 1;
-                while (!arguments.empty()) {                            // parse arguments further into argv
-                    if(arguments.find_first_of(' ') != string::npos) {          // if arguments has a space character
-                        argv[i] = strdup(arguments.substr(0, arguments.find_first_of(' ')).data());
-                        arguments.erase(0, arguments.find_first_of(' ') + 1);
-                    } else {                                                    // if no space character
-                        argv[i] = strdup(arguments.substr(0, arguments.find_first_of(' ')).data());
-                        arguments.erase(0, arguments.find_first_of(' '));
-                    }
-                    i++;
-                }
-                
-                argv[i] = '\0';
+				if(arguments.find(">") != string::npos) {
+					filename = arguments.substr(arguments.find(">") + 1);		// save filename
+					size_t found = arguments.find(">");
+					size_t foundNext = arguments.find(">", found + 1);
 
-                if (execvp(argv[0], argv) < 0){
-                    write(1, command.data(), command.length());
-                    write(1, ": command not found\n" , 20);
-                }
-            }
+					arguments.erase(found, foundNext);		// if no more arguments erase right parameters for running
+				
+					int file, stdout;
+					file = open(filename.data(), O_WRONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
+					stdout = dup(STDOUT_FILENO);									// save STDIN to stdin
+					dup2(file, STDOUT_FILENO);										// copy file fd to STDIN
+				
+					if (run(command, arguments) < 0) return 0;
+				
+					dup2(stdout, STDOUT_FILENO);								// return stdout back to STDIN
+				} else if(arguments.find("<") != string::npos) {
+					filename = arguments.substr(arguments.find(" < ") + 3);		// save filename
+					size_t found = arguments.find(" < ");
+					size_t foundNext = arguments.find(" < ", found + 1);
+
+					arguments.erase(found, foundNext);					// if no more arguments erase right parameters for running
+					
+					int file, stdin;
+					file = open(filename.data(), O_RDONLY | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
+					stdin = dup(STDIN_FILENO);									// save STDIN to stdin
+					dup2(file, STDIN_FILENO);									// copy file fd to STDIN
+					
+					if (run(command, arguments) < 0) return 0;
+				
+					dup2(stdin, STDIN_FILENO);							// return stdout back to STDIN
+				}
+				continue;
+			}
+				
+			if (run(command, arguments) < 0) return 0;
+			
            
         }
 
