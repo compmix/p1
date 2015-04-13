@@ -10,6 +10,7 @@
  *  ls              -   done!
  *  exit            -   done!
  *  app opening     -   done!
+ * 	redirect		-	done!
  *	piping			-	starting
 */
 #include <unistd.h>
@@ -401,7 +402,7 @@ int main(int argc, char *argv[]) {
 					if(arguments[foundNext - 1] == ' ') arguments.erase(foundNext - 1, 1);
 					foundNext = arguments.find_first_of("><|", found + 1);
 					nextexec = arguments.substr(found + 1, arguments.find_first_of(' ') - found - 1);				// save filename
-					nextArgs = arguments.substr(arguments.find_first_of(' ', found) + 1, foundNext - 1);
+					//nextArgs = arguments.substr(arguments.find_first_of(' ', found) + 1, foundNext - 1);
 					arguments.erase(0, foundNext);			// if no more arguments erase right parameters for running
 					pipeFlag = 1;
 					pipe(FDs);
@@ -414,14 +415,18 @@ int main(int argc, char *argv[]) {
 			int pid = fork();
 			
 			if (pid != 0) {		//parent
-				while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
 				
 				if(pipeFlag) {
-					dup2(FDs[0], STDIN_FILENO);
-					
-					if(run(nextexec, nextArgs) < 0) return -1;
+					int pid2 = fork();
+					if(pid2 != 0) 
+						while (wait(NULL) != pid2);
+					else {
+						dup2(FDs[0], STDIN_FILENO);
+						cout << "here" << endl;
+						if(run(nextexec, nextArgs) < 0) return -1;
+					}
 				}
-				
+				while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
 			
 			} else {			//child
 				if(left) { 

@@ -1,0 +1,10 @@
+drwxrwxr-x .git
+-rwxrwxr-x ashell
+-rwxrwxr-x test
+-rw-rw-r-- test.cpp
+-rwxrwxr-x out.txt
+drwxr-xr-x ..
+-rw-rw-r-- README.md
+drwxrwxr-x .
+-rw-r----- noncanmode.c
+-rw-rw-r-- ashell.cpp
