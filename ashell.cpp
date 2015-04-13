@@ -355,61 +355,105 @@ int main(int argc, char *argv[]) {
             _exit(0);
             
         } else {                            // attempts to run process
-			string filename;
 			
+			string filein, fileout;
+			int left = 0, right = 0;
+			string args = arguments;
+
 			while((arguments.find_first_of("><|") != string::npos)) {				// as long as there are special symbols
+				size_t found = arguments.find_first_of("><|");
+				if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);
+				if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
 				
+				found = arguments.find_first_of("><|");
+				args = arguments.substr(0, found);
+				
+				
+				/* Left redirect */
+				if(arguments.find("<") != string::npos) {
+					size_t found = arguments.find("<");
+					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);
+					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
+					
+					
+					found = arguments.find("<");
+					size_t foundNext = arguments.find_first_of("><|", found + 1);
+					if(arguments[foundNext + 1] == ' ') arguments.erase(foundNext + 1, 1);
+					if(arguments[foundNext - 1] == ' ') arguments.erase(foundNext - 1, 1);
+					foundNext = arguments.find_first_of("><|", found + 1);
+					
+					fileout = arguments.substr(found + 1, foundNext - 1);		// save filename
+					arguments.erase(0, foundNext);					// if no more arguments erase right parameters for running
+					left = 1;
+				}
+					
+				/* right redirect */
 				if(arguments.find(">") != string::npos) {
 					size_t found = arguments.find(">");
 					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);		// remove extra spaces
 					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
-					filename = arguments.substr(arguments.find(">") + 1);				// save filename
 					
-					found = arguments.find(">");										
+					
+					found = arguments.find(">");		
 					size_t foundNext = arguments.find_first_of("><|", found + 1);
-					
-					string args = arguments.substr(0, found);
-					arguments.erase(found, foundNext);			// if no more arguments erase right parameters for running
-					
-					int file, stdout;
-					file = open(filename.data(), O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
-					stdout = dup(STDOUT_FILENO);									// save STDIN to stdin
-					dup2(file, STDOUT_FILENO);										// copy file fd to STDIN
-				
-					
-					if (run(command, args) < 0) return 0;
-				
-					dup2(stdout, STDOUT_FILENO);								// return stdout back to STDIN
-					
-				} else if(arguments.find("<") != string::npos) {
-					size_t found = arguments.find("<");
-					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);
-					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
-					filename = arguments.substr(arguments.find("<") + 1);		// save filename
-					
-					found = arguments.find("<");
-					size_t foundNext = arguments.find_first_of("><|", found + 1);
-		
-					string args = arguments.substr(0, found);
-					arguments.erase(found, foundNext);					// if no more arguments erase right parameters for running
-
-					int file, stdin;
-					file = open(filename.data(), O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);				// open file with fd file
-					stdin = dup(STDIN_FILENO);									// save STDIN to stdin
-					dup2(file, STDIN_FILENO);									// copy file fd to STDIN
-					
-					if (run(command, args) < 0) return 0;
-				
-					dup2(stdin, STDIN_FILENO);							// return stdin back to STDIN
+					if(arguments[foundNext + 1] == ' ') arguments.erase(foundNext + 1, 1);
+					if(arguments[foundNext - 1] == ' ') arguments.erase(foundNext - 1, 1);
+					foundNext = arguments.find_first_of("><|", found + 1);
+					filein = arguments.substr(found + 1, foundNext - 1);				// save filename
+					arguments.erase(0, foundNext);			// if no more arguments erase right parameters for running
+					right = 1;
 				}
-				continue;
+			
+
 			}
 
-			if (run(command, arguments) < 0) return 0;
-			
-           
-        }
 
-    }   // main while loop
+			int pid = fork();
+			if (pid != 0) {		//parent
+				while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
+				
+			
+			} else {			//child
+				if(left) { 
+					// redirect STDOUT to file fd
+					close(STDIN_FILENO);
+					open(fileout.data(), O_RDONLY, S_IRWXU|S_IRWXG|S_IRWXO);				// open file with fd file
+				}
+				
+				if(right) { 
+					// redirect STDOUT to file fd
+					close(STDOUT_FILENO);
+					open(filein.data(), O_CREAT|O_WRONLY|O_TRUNC, S_IRWXU|S_IRWXG|S_IRWXO);				// open file with fd file
+
+				}
+				
+				// parse arguments into argv
+				char *argv[32]= {NULL};  			// pointer to size 32 array
+				argv[0] = strdup(command.c_str());
+				int i = 1;
+				while (!args.empty()) {                            // parse arguments further into argv
+					if(args.find_first_of(' ') != string::npos) {          // if arguments has a space character
+						argv[i] = strdup(args.substr(0, args.find_first_of(' ')).data());
+						args.erase(0, args.find_first_of(' ') + 1);
+					} else {                                                    // if no space character
+						argv[i] = strdup(args.substr(0, args.find_first_of(' ')).data());
+						args.erase(0, args.find_first_of(' '));
+					}
+					i++;
+				}
+				
+				argv[i] = '\0';
+
+				if (execvp(argv[0], argv) < 0){
+					write(1, command.data(), command.length());
+					write(1, ": command not found\n" , 20);
+					return -1;
+				}
+				
+				
+				} 			// end child
+					
+			}
+	}   // main while loop
     return 0;
 }
