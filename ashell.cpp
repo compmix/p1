@@ -286,6 +286,8 @@ void printLS(string dir, string arguments) {
     closedir(mydir);
 }
 
+
+
 int run(string command, string args) {
 	
 	// parse arguments into argv
@@ -310,6 +312,76 @@ int run(string command, string args) {
 		write(1, ": command not found\n" , 20);
 		return -1;
 	}
+	
+	return 0;
+}
+
+/* multi-piping
+int runPipe(int pipeFlag, vector<string> commandQ, vector<string> argsQ) {
+	int i;
+	pid_t pid;
+	int in, fd [2];
+
+	in = 0;
+
+	for ( ; i < pipeFlag + 1; i++)
+	{
+	  pipe (fd);
+
+		cout << commandQ[i] << endl << argsQ[i] << endl;
+		if ((pid = fork()) == 0) { 		// child
+			if (in != 0) {
+			  dup2 (in, 0);
+			  close (in);
+			}
+
+			if (fd[1] != 1) {
+			  dup2 (fd[1], 1);
+			  close (fd[1]);
+			}
+			
+			if(run(commandQ[i], argsQ[i]) < 0) return -1;
+		} // child
+		
+	  close (fd [1]);
+	  in = fd [0];
+	}
+	
+	if (in != 0)
+		dup2 (in, 0);
+		
+	if(run(commandQ[i], argsQ[i]) < 0) return -1;
+	
+	return 0;
+} */
+
+int runPipe(int pipeFlag, vector<string> commandQ, vector<string> argsQ) {
+	/* PIPE HERE
+	int FDs[2], stdout;
+	pipe(FDs);
+	stdout = dup(1);
+	
+	// left | right
+	int pid = fork();
+	if(pid != 0) {		// in parent
+		while(wait(NULL) != pid);
+		int pid2 = fork();
+		if(pid2 != 0) { // in parent
+			while(wait(NULL) != pid2);
+		} else {	// in sibling (right)
+			dup2(FDs[0], STDIN_FILENO);
+			close(FDs[0]);
+			if(run(commandQ[1], argsQ[1]) < 0) return -1;
+		}
+
+	} else {	// in child (left)
+		dup2(FDs[1], STDOUT_FILENO);
+		close(FDs[1]);
+		if(run(commandQ[0], argsQ[0]) < 0) return -1;
+	}		
+	dup2(stdout, 1); 
+	*/
+	
 	
 	return 0;
 }
@@ -342,8 +414,11 @@ int main(int argc, char *argv[]) {
         } else {                            // attempts to run process
 			
 			string filein, fileout, nextexec;
-			int left = 0, right = 0, pipeFlag = 0, FDs[2];
-			string args = arguments, nextArgs;
+			int left = 0, right = 0, pipeFlag = 0;
+			string args = arguments;
+			vector<string> commandQ, argsQ;
+			commandQ.push_back(command);
+			
 
 			while((arguments.find_first_of("><|") != string::npos)) {				// as long as there are special symbols
 				size_t found = arguments.find_first_of("><|");
@@ -352,7 +427,7 @@ int main(int argc, char *argv[]) {
 				
 				found = arguments.find_first_of("><|");
 				args = arguments.substr(0, found);
-				
+				argsQ.push_back(args);
 				
 				/* Left redirect */
 				if(arguments.find("<") != string::npos) {
@@ -395,37 +470,28 @@ int main(int argc, char *argv[]) {
 					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);		// remove extra spaces
 					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
 					
-					
 					found = arguments.find("|");		
 					size_t foundNext = arguments.find_first_of("><|", found + 1);
 					if(arguments[foundNext + 1] == ' ') arguments.erase(foundNext + 1, 1);
 					if(arguments[foundNext - 1] == ' ') arguments.erase(foundNext - 1, 1);
 					foundNext = arguments.find_first_of("><|", found + 1);
-					nextexec = arguments.substr(found + 1, arguments.find_first_of(' ') - found - 1);				// save filename
-					//nextArgs = arguments.substr(arguments.find_first_of(' ', found) + 1, foundNext - 1);
-					arguments.erase(0, foundNext);			// if no more arguments erase right parameters for running
-					pipeFlag = 1;
-					pipe(FDs);
 					
+					commandQ.push_back(arguments.substr(found + 1, arguments.find_first_of(' ') - found - 1));				// save filename
+					if(arguments.find_first_of(' ', found) == string::npos) argsQ.push_back("");
+					else argsQ.push_back(arguments.substr(arguments.find_first_of(' ', found) + 1, foundNext - 1));
+					arguments.erase(0, foundNext);			// if no more arguments erase right parameters for running
+					pipeFlag += 1;
 				}
 				
+			} // while arguments contain ><|
+			if(pipeFlag > 0) {
+				runPipe(pipeFlag, commandQ, argsQ);
+				continue;
 			}
-
-
+			
 			int pid = fork();
 			
 			if (pid != 0) {		//parent
-				
-				if(pipeFlag) {
-					int pid2 = fork();
-					if(pid2 != 0) 
-						while (wait(NULL) != pid2);
-					else {
-						dup2(FDs[0], STDIN_FILENO);
-						cout << "here" << endl;
-						if(run(nextexec, nextArgs) < 0) return -1;
-					}
-				}
 				while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
 			
 			} else {			//child
@@ -440,11 +506,6 @@ int main(int argc, char *argv[]) {
 					close(STDOUT_FILENO);
 					open(filein.data(), O_CREAT|O_WRONLY|O_TRUNC, S_IRWXU|S_IRWXG|S_IRWXO);				// open file with fd file
 				}
-				
-				if(pipeFlag) {
-					dup2(FDs[1], STDOUT_FILENO);
-				}
-				
 				
 				if (command == "ls") {                                                   // cout << "list directory ";
 					if(arguments.empty()) arguments = ".";          // empty arguments should return current directory, not home
@@ -461,9 +522,9 @@ int main(int argc, char *argv[]) {
 				} else if(run(command, args) < 0) return -1;
 			
 				
-			} 			// end child
+			} 	// end child
 					
-		}
-	}   // main while loop
+		} // if command
+	}  // main while loop
     return 0;
 }

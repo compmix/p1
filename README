@@ -11,13 +11,13 @@
  *  exit            -   done!
  *  app opening     -   done!
  * 	redirect		-	done!
- *	piping			-	started
+ *	piping			-	partial (multi pipes not working)
  * 
  *	
  * Sources:
  * Inspiration for certain parts of code can be found in the following links:
  *  noncanonical mode - provided by Prof. Chris Nitta, UC Davis
  *	printLS - http://codingfreak.blogspot.com/2012/08/implementing-ls-command-in-c.html
- *
+ *  multipiping - http://stackoverflow.com/questions/8082932/connecting-n-commands-with-pipes-in-a-shell
  *
 */
