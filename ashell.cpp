@@ -285,34 +285,29 @@ void printLS(string dir, string arguments) {
     closedir(mydir);
 }
 
-int run(string command, string arguments) {
-	int pid = fork();
-	if (pid != 0) {
-		while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
+int run(string command, string args) {
 	
-	} else {
-		
-		char *argv[32]= {NULL};  			// pointer to size 32 array
-		argv[0] = strdup(command.c_str());
-		int i = 1;
-		while (!arguments.empty()) {                            // parse arguments further into argv
-			if(arguments.find_first_of(' ') != string::npos) {          // if arguments has a space character
-				argv[i] = strdup(arguments.substr(0, arguments.find_first_of(' ')).data());
-				arguments.erase(0, arguments.find_first_of(' ') + 1);
-			} else {                                                    // if no space character
-				argv[i] = strdup(arguments.substr(0, arguments.find_first_of(' ')).data());
-				arguments.erase(0, arguments.find_first_of(' '));
-			}
-			i++;
+	// parse arguments into argv
+	char *argv[32]= {NULL};  			// pointer to size 32 array
+	argv[0] = strdup(command.c_str());
+	int i = 1;
+	while (!args.empty()) {                            // parse arguments further into argv
+		if(args.find_first_of(' ') != string::npos) {          // if arguments has a space character
+			argv[i] = strdup(args.substr(0, args.find_first_of(' ')).data());
+			args.erase(0, args.find_first_of(' ') + 1);
+		} else {                                                    // if no space character
+			argv[i] = strdup(args.substr(0, args.find_first_of(' ')).data());
+			args.erase(0, args.find_first_of(' '));
 		}
-		
-		argv[i] = '\0';
+		i++;
+	}
+	
+	argv[i] = '\0';
 
-		if (execvp(argv[0], argv) < 0){
-			write(1, command.data(), command.length());
-			write(1, ": command not found\n" , 20);
-			return -1;
-		}
+	if (execvp(argv[0], argv) < 0){
+		write(1, command.data(), command.length());
+		write(1, ": command not found\n" , 20);
+		return -1;
 	}
 	
 	return 0;
@@ -356,9 +351,9 @@ int main(int argc, char *argv[]) {
             
         } else {                            // attempts to run process
 			
-			string filein, fileout;
-			int left = 0, right = 0;
-			string args = arguments;
+			string filein, fileout, nextexec;
+			int left = 0, right = 0, pipeFlag = 0, FDs[2];
+			string args = arguments, nextArgs;
 
 			while((arguments.find_first_of("><|") != string::npos)) {				// as long as there are special symbols
 				size_t found = arguments.find_first_of("><|");
@@ -404,13 +399,39 @@ int main(int argc, char *argv[]) {
 					right = 1;
 				}
 			
-
+				/* piping */
+				if(arguments.find("|") != string::npos) {
+					size_t found = arguments.find("|");
+					if(arguments[found + 1] == ' ') arguments.erase(found + 1, 1);		// remove extra spaces
+					if(arguments[found - 1] == ' ') arguments.erase(found - 1, 1);
+					
+					
+					found = arguments.find("|");		
+					size_t foundNext = arguments.find_first_of("><|", found + 1);
+					if(arguments[foundNext + 1] == ' ') arguments.erase(foundNext + 1, 1);
+					if(arguments[foundNext - 1] == ' ') arguments.erase(foundNext - 1, 1);
+					foundNext = arguments.find_first_of("><|", found + 1);
+					nextexec = arguments.substr(found + 1, arguments.find_first_of(' ') - found - 1);				// save filename
+					nextArgs = arguments.substr(arguments.find_first_of(' ', found) + 1, foundNext - 1);
+					arguments.erase(0, foundNext);			// if no more arguments erase right parameters for running
+					pipeFlag = 1;
+					pipe(FDs);
+					
+				}
+				
 			}
 
 
 			int pid = fork();
+			
 			if (pid != 0) {		//parent
 				while (wait(NULL) != pid);          // cout << "child terminated"<< endl;
+				
+				if(pipeFlag) {
+					dup2(FDs[0], STDIN_FILENO);
+					
+					if(run(nextexec, nextArgs) < 0) return -1;
+				}
 				
 			
 			} else {			//child
@@ -424,36 +445,18 @@ int main(int argc, char *argv[]) {
 					// redirect STDOUT to file fd
 					close(STDOUT_FILENO);
 					open(filein.data(), O_CREAT|O_WRONLY|O_TRUNC, S_IRWXU|S_IRWXG|S_IRWXO);				// open file with fd file
-
 				}
 				
-				// parse arguments into argv
-				char *argv[32]= {NULL};  			// pointer to size 32 array
-				argv[0] = strdup(command.c_str());
-				int i = 1;
-				while (!args.empty()) {                            // parse arguments further into argv
-					if(args.find_first_of(' ') != string::npos) {          // if arguments has a space character
-						argv[i] = strdup(args.substr(0, args.find_first_of(' ')).data());
-						args.erase(0, args.find_first_of(' ') + 1);
-					} else {                                                    // if no space character
-						argv[i] = strdup(args.substr(0, args.find_first_of(' ')).data());
-						args.erase(0, args.find_first_of(' '));
-					}
-					i++;
+				if(pipeFlag) {
+					dup2(FDs[1], STDOUT_FILENO);
 				}
 				
-				argv[i] = '\0';
-
-				if (execvp(argv[0], argv) < 0){
-					write(1, command.data(), command.length());
-					write(1, ": command not found\n" , 20);
-					return -1;
-				}
+				if(run(command, args) < 0) return -1;
+			
 				
-				
-				} 			// end child
+			} 			// end child
 					
-			}
+		}
 	}   // main while loop
     return 0;
 }
