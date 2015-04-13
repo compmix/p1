@@ -334,18 +334,7 @@ int main(int argc, char *argv[]) {
 				write(1, ": No such file or directory\n", 28);
             }
 
-        } else if (command == "ls") {                                                   // cout << "list directory ";
-			if(arguments.empty()) arguments = ".";          // empty arguments should return current directory, not home
-			string dir = setDir(arguments);
-			printLS(dir, arguments);
- 
-        } else if(command == "history") {
-            printHistory(myHistory);
-            
-        } else if (command == "pwd") {      // print working directory
-            write(1, pwd().data(), pwd(1).length());
-            write(1, "\n", 1);
-            
+
         } else if (command == "exit") {     // breaks and exits shell
             _exit(0);
             
@@ -451,7 +440,20 @@ int main(int argc, char *argv[]) {
 					dup2(FDs[1], STDOUT_FILENO);
 				}
 				
-				if(run(command, args) < 0) return -1;
+				
+				if (command == "ls") {                                                   // cout << "list directory ";
+					if(arguments.empty()) arguments = ".";          // empty arguments should return current directory, not home
+					string dir = setDir(arguments);
+					printLS(dir, arguments);
+					return 0;
+				} else if (command == "pwd") {      // print working directory
+					write(1, pwd().data(), pwd(1).length());
+					write(1, "\n", 1);
+					return 0; 
+				} else if(command == "history") {
+					printHistory(myHistory);
+					return 0;
+				} else if(run(command, args) < 0) return -1;
 			
 				
 			} 			// end child
